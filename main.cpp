@@ -64,7 +64,7 @@ void update_outputfile_wait(ofstream* out,int semaphor_id,long durationtemp,int 
     }
 }
 //This function outputs the TIME and ready queue. When a change occurs in the ready queue, we are calling this function.
-void update_outputfile(ofstream* out){
+void update_outputfile(ofstream* out,long durationtemp,int mul){
     string tire = "-";
     string ready_queue;
     if(!Ready_Queue.empty()){
@@ -76,32 +76,37 @@ void update_outputfile(ofstream* out){
             ready_queue.append(copy_queue.front().name);
             copy_queue.pop();
         }
-        *out<<TIME<<"::HEAD-"<<ready_queue<<"-TAIL"<<endl;}
+        *out<<TIME+durationtemp*mul<<"::HEAD-"<<ready_queue<<"-TAIL"<<endl;}
     else{
-        *out<<TIME<<"::HEAD--TAIL"<<endl;
+        *out<<TIME+durationtemp*mul<<"::HEAD--TAIL"<<endl;
     }
 }
-void WaitS(int semaphor_id, Process* currentprocess,ofstream* out,long duration_temp){
+bool WaitS(int semaphor_id, Process* currentprocess,ofstream* out,long duration_temp){
     if(Semaphors[semaphor_id].lock==1){
         Semaphors[semaphor_id].Wait_Queue.push(*currentprocess);
         update_outputfile_wait(&Semaphors[semaphor_id].outfile,semaphor_id,duration_temp,1);
+        //update_outputfile(out,duration_temp,1);
+        return false;
     }
     else{
         Semaphors[semaphor_id].lock=1;
+        return true;
     }
 }
-void SignS(int semaphor_id,Process* currentprocess,ofstream* out){
+bool SignS(int semaphor_id,Process* currentprocess,ofstream* out,long duration_temp){
     Semaphors[semaphor_id].lock=0; //unlock the corresponding semaphor
-    Ready_Queue.push(*currentprocess);
-    update_outputfile(out);
+    //Ready_Queue.push(*currentprocess);
+    //update_outputfile(out,duration_temp,0);
     if(!Semaphors[semaphor_id].Wait_Queue.empty()){
         Semaphors[semaphor_id].lock=1;
         Process p = Semaphors[semaphor_id].Wait_Queue.front();
         Ready_Queue.push(p);
-        update_outputfile(out);
+        //update_outputfile(out,duration_temp,0);
         Semaphors[semaphor_id].Wait_Queue.pop();
-        update_outputfile_wait(&Semaphors[semaphor_id].outfile,semaphor_id,0,0);
+        update_outputfile_wait(&Semaphors[semaphor_id].outfile,semaphor_id,duration_temp,1);
+        return false;
     }
+    return true;
     //semaphoreun wait queuesunu check et, varsa al. burda biteni de ready queue ya at.
 }
 //This function takes the file and the line number as number and goes to that line of file. I took this function from stackoverflow.
@@ -134,12 +139,12 @@ int main() {
         }
     } //from definition.txt file, we are reading the process details and creating the Process instances.
     else{cout<<"error while opening the file, make sure that you are in the right directory"<<endl;}//if smt off occurs with definition.txt file, this error will be printed.
-
+    Initialize_Semaphors();
 // assuming the first process(P1,first in the definition.txt) will arrive earliest
     TIME = Processes.front().arrival_time;
     Process front=Processes.front();
     Ready_Queue.push(front);
-    update_outputfile(&outfile);
+    update_outputfile(&outfile,0,0);
     Processes.pop();
 //before going into while loop, we are initializing the ready queue by putting the first process into it. We are popping it from Processes queue since it will be either in the ready queue or completed.
     while(completed!=howmanyprocesses){
@@ -189,12 +194,16 @@ int main() {
                 unsigned long last= instruction_name.length()-1;
                 char which_semaphor_char = instruction_name[last];
                 int which_semaphor_int = which_semaphor_char - '0';
-                WaitS(which_semaphor_int,&current_process,&outfile,duration_temp);}
+                bool check = WaitS(which_semaphor_int,&current_process,&outfile,duration_temp);
+                if(!check){
+                    break;
+                }
+            }
             else if(strstr(myArray,sign_arr)){
                 unsigned long last= instruction_name.length()-1;
                 char which_semaphor_char = instruction_name[last];
                 int which_semaphor_int = which_semaphor_char - '0';
-                SignS(which_semaphor_int,&current_process,&outfile);}
+                SignS(which_semaphor_int,&current_process,&outfile,duration_temp);}
         }
         current_process.last_executed_line += line_offset;//we should record where we left.
         TIME+=duration_temp;//TIME is updated.
@@ -207,10 +216,10 @@ int main() {
 //if the previous instruction is not exit, the process is not completed.we should put it into ready queue and update the output file.
         if(instruction_name!="exit" && !strstr(myArray,wait_arr) &&  !strstr(myArray,sign_arr)){
             Ready_Queue.push(current_process);
-            update_outputfile(&outfile);
+            update_outputfile(&outfile,0,0);
         }
 //if it is exit, then it is completed we are done with that process, we will increment completed by 1  and update the output file.
-        else{update_outputfile(&outfile);
+        else{update_outputfile(&outfile,0,0);
             completed++;}
     }
 //until all processes are completed, we are continueing to do the same thing. if they are all completed, we're done.
